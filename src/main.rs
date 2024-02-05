@@ -117,6 +117,31 @@ mod tests {
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
 
+        let collection_page = CollectionPage {
+            header: CollectionPageHeader {
+                page_number: 0,
+                number_of_documents: 0,
+                free_space_offset: 0,
+                free_space_available: 45000,
+            },
+            document_pointers: vec![DocumentPointer { offset: 0, size: 7 }],
+            data: vec![1, 2, 3, 4, 5, 7],
+        };
+
+        write_page_to_collection(dir_name, &collection_page, "test");
+
+        let collection_page_from_file =
+            read_page_from_collection(dir_name, "test", 0).unwrap_or_else(|why| panic!("{}", why));
+
+        assert_eq!(collection_page, collection_page_from_file);
+    }
+
+    #[test]
+    fn test_write_and_read_two_pages_from_collection() {
+        let dir = tempdir().unwrap();
+        let binding = dir.into_path();
+        let dir_name = binding.to_str().unwrap();
+
         let collection_page_0 = CollectionPage {
             header: CollectionPageHeader {
                 page_number: 0,
