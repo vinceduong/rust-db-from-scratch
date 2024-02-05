@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
+use std::error::Error;
+use std::fs::{File, OpenOptions};
 use std::os::unix::prelude::FileExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MyStruct {
@@ -28,6 +29,41 @@ struct CollectionPage {
     header: CollectionPageHeader,
     document_pointers: Vec<DocumentPointer>,
     data: Vec<u8>,
+}
+
+struct Collection<'a> {
+    name: &'a str,
+    dir: &'a str,
+    number_of_pages: u64,
+    path: PathBuf,
+    file: File,
+}
+
+impl<'a> Collection<'a> {
+    fn new(name: &'a str, dir: &'a str) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut path = PathBuf::from(dir);
+        path.push(format!("{}.collection", name));
+
+        let file = OpenOptions::new().read(true).open(&path)?;
+        let mut page_number: u64 = 0;
+        let mut encoded = vec![0u8; 1];
+
+        while let Ok(bytes_read) = file.read_at(&mut encoded, page_number * COLLECTION_PAGE_SIZE) {
+            if bytes_read < 1 {
+                break;
+            }
+
+            page_number += 1;
+        }
+
+        Ok(Collection {
+            name,
+            dir,
+            number_of_pages: page_number,
+            path,
+            file,
+        })
+    }
 }
 
 const COLLECTION_PAGE_SIZE: u64 = 64_000;
