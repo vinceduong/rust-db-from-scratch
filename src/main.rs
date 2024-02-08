@@ -1,21 +1,16 @@
 use bincode::ErrorKind;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::{File, OpenOptions};
+use std::marker::PhantomData;
 use std::os::unix::prelude::FileExt;
 use std::path::Path;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct MyStruct {
-    field1: u32,
-    field2: String,
-}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct CollectionPageHeader {
     page_number: u64,
     number_of_documents: u64,
-    free_space_offset: u64,
     free_space_available: u64,
 }
 
@@ -26,15 +21,58 @@ struct DocumentPointer {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct CollectionPage {
+struct CollectionPage<T> {
     header: CollectionPageHeader,
-    document_pointers: Vec<DocumentPointer>,
-    data: Vec<u8>,
+    data: Vec<T>,
 }
 
-struct Collection {
+#[derive(Debug)]
+enum InsertDocumentError {
+    NoFreeSpaceAvailable,
+    SerializeError(Box<ErrorKind>),
+}
+
+trait HasId {
+    type Id: PartialEq + Copy;
+    fn id(&self) -> Self::Id;
+}
+
+trait Document: Serialize + DeserializeOwned + HasId {}
+
+impl<T: Serialize + DeserializeOwned + HasId> Document for T {}
+
+impl<T: Document> CollectionPage<T> {
+    fn new(page_number: u64) -> CollectionPage<T> {
+        CollectionPage {
+            header: CollectionPageHeader {
+                page_number,
+                number_of_documents: 0,
+                free_space_available: COLLECTION_PAGE_DATA_SIZE,
+            },
+            data: vec![],
+        }
+    }
+
+    fn insert_document(&mut self, document: T) -> Result<(), InsertDocumentError> {
+        let document_size = bincode::serialized_size(&document)
+            .map_err(|e| InsertDocumentError::SerializeError(e))?;
+
+        if self.header.free_space_available < document_size as u64 {
+            return Err(InsertDocumentError::NoFreeSpaceAvailable);
+        }
+
+        self.data.push(document);
+
+        self.header.free_space_available -= document_size as u64;
+
+        Ok(())
+    }
+}
+
+struct Collection<T: Document> {
     number_of_pages: u64,
     file: File,
+    _marker: PhantomData<T>,
 }
 
 #[derive(Debug)]
@@ -51,7 +89,7 @@ enum WritePageError {
     SerializeError(Box<ErrorKind>),
 }
 
-impl Collection {
+impl<T: Document> Collection<T> {
     fn new(name: &str, dir: &str) -> Result<Self, Box<dyn Error>> {
         let binding = format!("{}/{}.collection", dir, name);
         let path = Path::new(&binding);
@@ -75,13 +113,15 @@ impl Collection {
             page_number += 1;
         }
 
-        Ok(Collection {
+        let collection = Collection {
             number_of_pages: page_number,
             file,
-        })
+            _marker: PhantomData,
+        };
+        Ok(collection)
     }
 
-    fn read_page(self: &Self, page_number: u64) -> Result<CollectionPage, ReadPageError> {
+    fn read_page(self: &Self, page_number: u64) -> Result<CollectionPage<T>, ReadPageError> {
         if page_number > self.number_of_pages {
             return Err(ReadPageError::PageNumberTooHighError);
         }
@@ -95,7 +135,7 @@ impl Collection {
         bincode::deserialize(&encoded[..]).map_err(|e| ReadPageError::DeserializeError(e))
     }
 
-    fn write_page(&mut self, page: &CollectionPage) -> Result<(), WritePageError> {
+    fn write_page(&mut self, page: &CollectionPage<T>) -> Result<(), WritePageError> {
         if page.header.page_number > self.number_of_pages + 1 {
             return Err(WritePageError::PageNumberTooHighError);
         }
@@ -117,15 +157,28 @@ impl Collection {
 
 const COLLECTION_PAGE_SIZE: u64 = 64_000;
 
+const COLLECTION_PAGE_DATA_SIZE: u64 = 62_000;
+
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
+struct MyDocument {
+    id: u64,
+}
+
+impl HasId for MyDocument {
+    type Id = u64;
+
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
 fn main() {
-    let collection_page_0 = CollectionPage {
+    let collection_page_0 = CollectionPage::<MyDocument> {
         header: CollectionPageHeader {
             page_number: 0,
             number_of_documents: 0,
-            free_space_offset: 0,
             free_space_available: 45000,
         },
-        document_pointers: vec![],
         data: vec![],
     };
 
@@ -133,10 +186,8 @@ fn main() {
         header: CollectionPageHeader {
             page_number: 1,
             number_of_documents: 0,
-            free_space_offset: 0,
             free_space_available: 45000,
         },
-        document_pointers: vec![],
         data: vec![],
     };
 
@@ -161,17 +212,15 @@ mod tests {
         let dir = tempdir().unwrap();
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
-        let mut collection = Collection::new("collection", dir_name).unwrap();
+        let mut collection = Collection::<MyDocument>::new("collection", dir_name).unwrap();
 
         let collection_page = CollectionPage {
             header: CollectionPageHeader {
                 page_number: 0,
                 number_of_documents: 0,
-                free_space_offset: 0,
                 free_space_available: 45000,
             },
-            document_pointers: vec![DocumentPointer { offset: 0, size: 7 }],
-            data: vec![1, 2, 3, 4, 5, 7],
+            data: vec![MyDocument { id: 1 }, MyDocument { id: 1 }],
         };
 
         collection.write_page(&collection_page).unwrap();
@@ -188,16 +237,15 @@ mod tests {
         let dir = tempdir().unwrap();
 
         let binding = dir.into_path();
-        let mut collection = Collection::new("collection", binding.to_str().unwrap()).unwrap();
+        let mut collection =
+            Collection::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
 
         let collection_page_0 = CollectionPage {
             header: CollectionPageHeader {
                 page_number: 0,
                 number_of_documents: 0,
-                free_space_offset: 0,
                 free_space_available: 45000,
             },
-            document_pointers: vec![],
             data: vec![],
         };
 
@@ -205,10 +253,8 @@ mod tests {
             header: CollectionPageHeader {
                 page_number: 1,
                 number_of_documents: 0,
-                free_space_offset: 0,
                 free_space_available: 45000,
             },
-            document_pointers: vec![],
             data: vec![],
         };
 
@@ -231,16 +277,15 @@ mod tests {
         let dir = tempdir().unwrap();
 
         let binding = dir.into_path();
-        let mut collection = Collection::new("collection", binding.to_str().unwrap()).unwrap();
+        let mut collection =
+            Collection::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
 
         let collection_page_0 = CollectionPage {
             header: CollectionPageHeader {
                 page_number: 0,
                 number_of_documents: 0,
-                free_space_offset: 0,
                 free_space_available: 45000,
             },
-            document_pointers: vec![],
             data: vec![],
         };
 
@@ -248,10 +293,8 @@ mod tests {
             header: CollectionPageHeader {
                 page_number: 1,
                 number_of_documents: 0,
-                free_space_offset: 0,
                 free_space_available: 45000,
             },
-            document_pointers: vec![],
             data: vec![],
         };
 
@@ -272,10 +315,8 @@ mod tests {
             header: CollectionPageHeader {
                 page_number: 0,
                 number_of_documents: 1,
-                free_space_offset: 2,
                 free_space_available: 45000,
             },
-            document_pointers: vec![],
             data: vec![],
         };
 
