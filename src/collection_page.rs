@@ -24,6 +24,13 @@ pub enum InsertDocumentError {
     SerializeError(Box<ErrorKind>),
 }
 
+#[derive(Debug)]
+pub enum UpdateDocumentError {
+    NotFound,
+    NoFreeSpaceAvailable,
+    SerializeError(Box<ErrorKind>),
+}
+
 impl<T: Document> CollectionPage<T> {
     pub fn new(page_number: u64) -> CollectionPage<T> {
         CollectionPage {
@@ -59,6 +66,30 @@ impl<T: Document> CollectionPage<T> {
     pub fn find_document(self, id: <T as HasId>::Id) -> Option<T> {
         self.data.into_iter().find(|d| d.id() == id)
     }
+
+    pub fn update_document(&mut self, new_doc: T) -> Result<(), UpdateDocumentError> {
+        for (index, value) in self.data.iter().enumerate() {
+            if value.id() == new_doc.id() {
+                let old_version_size = bincode::serialized_size(&value)
+                    .map_err(|e| UpdateDocumentError::SerializeError(e))?;
+                let new_vesion_size = bincode::serialized_size(&new_doc)
+                    .map_err(|e| UpdateDocumentError::SerializeError(e))?;
+
+                if self.header.free_space_available - old_version_size + new_vesion_size
+                    > COLLECTION_PAGE_DATA_SIZE
+                {
+                    return Err(UpdateDocumentError::NoFreeSpaceAvailable);
+                }
+
+                self.header.free_space_available -= old_version_size + new_vesion_size;
+
+                self.data[index] = new_doc;
+
+                return Ok(());
+            }
+        }
+        return Err(UpdateDocumentError::NotFound);
+    }
 }
 
 #[cfg(test)]
@@ -66,7 +97,6 @@ mod tests {
     use super::*;
     use crate::document::HasId;
     use serde_derive::{Deserialize, Serialize};
-    use tempfile::tempdir;
 
     #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
     struct MyDocument {
@@ -143,5 +173,45 @@ mod tests {
         let document = collection_page.find_document(2);
 
         assert_eq!(true, document.is_none())
+    }
+
+    #[test]
+    fn update_one_document() {
+        #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+        struct UserDocument {
+            id: u64,
+            name: String,
+        }
+
+        impl HasId for UserDocument {
+            type Id = u64;
+
+            fn id(&self) -> u64 {
+                self.id
+            }
+        }
+
+        let mut collection_page = CollectionPage::<UserDocument>::new(0);
+        let user_document = UserDocument {
+            id: 1,
+            name: "lol".to_string(),
+        };
+
+        collection_page.insert_document(user_document).unwrap();
+
+        collection_page
+            .update_document(UserDocument {
+                id: 1,
+                name: "mdr".to_string(),
+            })
+            .unwrap();
+
+        assert_eq!(
+            collection_page.data,
+            vec![UserDocument {
+                id: 1,
+                name: "mdr".to_string(),
+            }]
+        )
     }
 }
