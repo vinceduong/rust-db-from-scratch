@@ -51,11 +51,97 @@ impl<T: Document> CollectionPage<T> {
         self.data.push(document);
 
         self.header.free_space_available -= document_size as u64;
+        self.header.number_of_documents += 1;
 
         Ok(())
     }
 
     pub fn find_document(self, id: <T as HasId>::Id) -> Option<T> {
         self.data.into_iter().find(|d| d.id() == id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::HasId;
+    use serde_derive::{Deserialize, Serialize};
+    use tempfile::tempdir;
+
+    #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
+    struct MyDocument {
+        id: u64,
+    }
+
+    impl HasId for MyDocument {
+        type Id = u64;
+
+        fn id(&self) -> u64 {
+            self.id
+        }
+    }
+
+    #[test]
+    fn insert_one_document() {
+        let mut collection_page = CollectionPage::<MyDocument>::new(0);
+
+        collection_page
+            .insert_document(MyDocument { id: 1 })
+            .unwrap();
+
+        assert_eq!(collection_page.data, vec![MyDocument { id: 1 }]);
+        assert_eq!(collection_page.header.number_of_documents, 1);
+        assert_eq!(
+            collection_page.header.free_space_available,
+            COLLECTION_PAGE_DATA_SIZE - 8
+        )
+    }
+
+    #[test]
+    fn insert_multiple_document() {
+        let mut collection_page = CollectionPage::<MyDocument>::new(0);
+
+        collection_page
+            .insert_document(MyDocument { id: 1 })
+            .unwrap();
+
+        collection_page
+            .insert_document(MyDocument { id: 2 })
+            .unwrap();
+
+        assert_eq!(
+            collection_page.data,
+            vec![MyDocument { id: 1 }, MyDocument { id: 2 }]
+        );
+        assert_eq!(collection_page.header.number_of_documents, 2);
+        assert_eq!(
+            collection_page.header.free_space_available,
+            COLLECTION_PAGE_DATA_SIZE - 8 * 2
+        )
+    }
+
+    #[test]
+    fn find_one_document() {
+        let mut collection_page = CollectionPage::<MyDocument>::new(0);
+
+        collection_page
+            .insert_document(MyDocument { id: 1 })
+            .unwrap();
+
+        let document = collection_page.find_document(1);
+        assert_eq!(document.unwrap(), MyDocument { id: 1 })
+    }
+
+    #[test]
+    fn do_not_find_document() {
+        let mut collection_page = CollectionPage::<MyDocument>::new(0);
+
+        collection_page
+            .insert_document(MyDocument { id: 1 })
+            .unwrap();
+
+        let document = collection_page.find_document(2);
+
+        assert_eq!(true, document.is_none())
     }
 }
