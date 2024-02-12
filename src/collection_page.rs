@@ -31,6 +31,11 @@ pub enum UpdateDocumentError {
     SerializeError(Box<ErrorKind>),
 }
 
+#[derive(Debug)]
+pub enum RemoveDocumentError {
+    NotFound,
+}
+
 impl<T: Document> CollectionPage<T> {
     pub fn new(page_number: u64) -> CollectionPage<T> {
         CollectionPage {
@@ -63,8 +68,8 @@ impl<T: Document> CollectionPage<T> {
         Ok(())
     }
 
-    pub fn find_document(self, id: <T as HasId>::Id) -> Option<T> {
-        self.data.into_iter().find(|d| d.id() == id)
+    pub fn find_document(&self, id: <T as HasId>::Id) -> Option<&T> {
+        self.data.iter().find(|d| d.id() == id)
     }
 
     pub fn update_document(&mut self, new_doc: T) -> Result<(), UpdateDocumentError> {
@@ -89,6 +94,16 @@ impl<T: Document> CollectionPage<T> {
             }
         }
         return Err(UpdateDocumentError::NotFound);
+    }
+
+    pub fn remove_document(&mut self, id: <T as HasId>::Id) -> Result<T, RemoveDocumentError> {
+        let index = self
+            .data
+            .iter()
+            .position(|e| e.id() == id)
+            .ok_or_else(|| RemoveDocumentError::NotFound)?;
+
+        Ok(self.data.swap_remove(index))
     }
 }
 
@@ -159,7 +174,7 @@ mod tests {
             .unwrap();
 
         let document = collection_page.find_document(1);
-        assert_eq!(document.unwrap(), MyDocument { id: 1 })
+        assert_eq!(*document.unwrap(), MyDocument { id: 1 })
     }
 
     #[test]
@@ -213,5 +228,33 @@ mod tests {
                 name: "mdr".to_string(),
             }]
         )
+    }
+
+    #[test]
+    fn delete_one_document() {
+        #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+        struct UserDocument {
+            id: u64,
+            name: String,
+        }
+
+        impl HasId for UserDocument {
+            type Id = u64;
+
+            fn id(&self) -> u64 {
+                self.id
+            }
+        }
+
+        let mut collection_page = CollectionPage::<UserDocument>::new(0);
+        let user_document = UserDocument {
+            id: 1,
+            name: "lol".to_string(),
+        };
+
+        collection_page.insert_document(user_document).unwrap();
+        collection_page.remove_document(1).unwrap();
+
+        assert_eq!(collection_page.data, vec![])
     }
 }
