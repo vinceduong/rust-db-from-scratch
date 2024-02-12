@@ -9,7 +9,7 @@ use std::path::Path;
 
 const COLLECTION_PAGE_SIZE: u64 = 64_000;
 
-pub struct Collection<T: Document> {
+pub struct CollectionFile<T: Document> {
     number_of_pages: u64,
     file: File,
     _marker: PhantomData<T>,
@@ -29,7 +29,7 @@ pub enum WritePageError {
     SerializeError(Box<ErrorKind>),
 }
 
-impl<T: Document> Collection<T> {
+impl<T: Document> CollectionFile<T> {
     pub fn new(name: &str, dir: &str) -> Result<Self, Box<dyn Error>> {
         let binding = format!("{}/{}.collection", dir, name);
         let path = Path::new(&binding);
@@ -53,7 +53,7 @@ impl<T: Document> Collection<T> {
             page_number += 1;
         }
 
-        let collection = Collection {
+        let collection = CollectionFile {
             number_of_pages: page_number,
             file,
             _marker: PhantomData,
@@ -120,7 +120,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
-        let mut collection = Collection::<MyDocument>::new("collection", dir_name).unwrap();
+        let mut collection = CollectionFile::<MyDocument>::new("collection", dir_name).unwrap();
 
         let collection_page = CollectionPage::new(0);
 
@@ -139,7 +139,7 @@ mod tests {
 
         let binding = dir.into_path();
         let mut collection =
-            Collection::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
+            CollectionFile::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
 
         let collection_page_0 = CollectionPage::new(0);
 
@@ -165,7 +165,7 @@ mod tests {
 
         let binding = dir.into_path();
         let mut collection =
-            Collection::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
+            CollectionFile::<MyDocument>::new("collection", binding.to_str().unwrap()).unwrap();
 
         let mut collection_page_0 = CollectionPage::new(0);
 

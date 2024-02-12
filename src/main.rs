@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 mod collection;
 mod collection_page;
 mod document;
-use collection::Collection;
+use collection::CollectionFile;
 use collection_page::CollectionPage;
 use document::HasId;
 
@@ -25,7 +25,7 @@ fn main() {
     let collection_page_0: CollectionPage<MyDocument> = CollectionPage::new(0);
     let collection_page_1: CollectionPage<MyDocument> = CollectionPage::new(1);
 
-    let mut collection = Collection::new("collection", "./data").unwrap();
+    let mut collection = CollectionFile::new("collection", "./data").unwrap();
     collection.write_page(&collection_page_0).unwrap();
     collection.write_page(&collection_page_1).unwrap();
 
