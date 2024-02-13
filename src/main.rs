@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-mod collection;
+mod collection_file;
 mod collection_page;
 mod document;
-use collection::CollectionFile;
+use collection_file::CollectionFile;
 use collection_page::CollectionPage;
 use document::HasId;
 
