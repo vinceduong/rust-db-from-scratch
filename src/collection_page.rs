@@ -15,7 +15,7 @@ pub struct CollectionPageHeader {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CollectionPage<T> {
     header: CollectionPageHeader,
-    data: Vec<T>,
+    documents: Vec<T>,
 }
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl<T: Document> CollectionPage<T> {
                 number_of_documents: 0,
                 free_space_available: COLLECTION_PAGE_DATA_SIZE,
             },
-            data: vec![],
+            documents: vec![],
         }
     }
 
@@ -56,11 +56,17 @@ impl<T: Document> CollectionPage<T> {
         let document_size = bincode::serialized_size(&document)
             .map_err(|e| InsertDocumentError::SerializeError(e))?;
 
+        println!("Document size: {:?}", document_size);
+        println!(
+            "Free space available: {:?}",
+            self.header.free_space_available
+        );
+
         if self.header.free_space_available < document_size as u64 {
             return Err(InsertDocumentError::NoFreeSpaceAvailable);
         }
 
-        self.data.push(document);
+        self.documents.push(document);
 
         self.header.free_space_available -= document_size as u64;
         self.header.number_of_documents += 1;
@@ -69,11 +75,15 @@ impl<T: Document> CollectionPage<T> {
     }
 
     pub fn find_document(&self, id: <T as HasId>::Id) -> Option<&T> {
-        self.data.iter().find(|d| d.id() == id)
+        self.documents.iter().find(|d| d.id() == id)
+    }
+
+    pub fn documents(&self) -> &Vec<T> {
+        &self.documents
     }
 
     pub fn update_document(&mut self, new_doc: T) -> Result<(), UpdateDocumentError> {
-        for (index, value) in self.data.iter().enumerate() {
+        for (index, value) in self.documents.iter().enumerate() {
             if value.id() == new_doc.id() {
                 let old_version_size = bincode::serialized_size(&value)
                     .map_err(|e| UpdateDocumentError::SerializeError(e))?;
@@ -88,7 +98,7 @@ impl<T: Document> CollectionPage<T> {
 
                 self.header.free_space_available -= old_version_size + new_vesion_size;
 
-                self.data[index] = new_doc;
+                self.documents[index] = new_doc;
 
                 return Ok(());
             }
@@ -98,12 +108,12 @@ impl<T: Document> CollectionPage<T> {
 
     pub fn remove_document(&mut self, id: <T as HasId>::Id) -> Result<T, RemoveDocumentError> {
         let index = self
-            .data
+            .documents
             .iter()
             .position(|e| e.id() == id)
             .ok_or_else(|| RemoveDocumentError::NotFound)?;
 
-        Ok(self.data.swap_remove(index))
+        Ok(self.documents.swap_remove(index))
     }
 }
 
@@ -134,7 +144,7 @@ mod tests {
             .insert_document(MyDocument { id: 1 })
             .unwrap();
 
-        assert_eq!(collection_page.data, vec![MyDocument { id: 1 }]);
+        assert_eq!(collection_page.documents, vec![MyDocument { id: 1 }]);
         assert_eq!(collection_page.header.number_of_documents, 1);
         assert_eq!(
             collection_page.header.free_space_available,
@@ -155,7 +165,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            collection_page.data,
+            collection_page.documents,
             vec![MyDocument { id: 1 }, MyDocument { id: 2 }]
         );
         assert_eq!(collection_page.header.number_of_documents, 2);
@@ -222,7 +232,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            collection_page.data,
+            collection_page.documents,
             vec![UserDocument {
                 id: 1,
                 name: "mdr".to_string(),
@@ -255,6 +265,6 @@ mod tests {
         collection_page.insert_document(user_document).unwrap();
         collection_page.remove_document(1).unwrap();
 
-        assert_eq!(collection_page.data, vec![])
+        assert_eq!(collection_page.documents, vec![])
     }
 }
