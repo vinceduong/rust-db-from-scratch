@@ -9,6 +9,7 @@ use std::path::Path;
 
 const COLLECTION_PAGE_SIZE: u64 = 64_000;
 
+#[derive(Debug)]
 pub struct CollectionFile<T: Document> {
     number_of_pages: u64,
     file: File,
@@ -29,8 +30,14 @@ pub enum WritePageError {
     SerializeError(Box<ErrorKind>),
 }
 
+#[derive(Debug)]
+pub enum NewCollectionFileError {
+    IoError(std::io::Error),
+    WritePageError(WritePageError),
+}
+
 impl<T: Document> CollectionFile<T> {
-    pub fn new(name: &str, dir: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(name: &str, dir: &str) -> Result<Self, NewCollectionFileError> {
         let binding = format!("{}/{}.collection", dir, name);
         let path = Path::new(&binding);
         let file = OpenOptions::new()
@@ -40,7 +47,7 @@ impl<T: Document> CollectionFile<T> {
             .open(&path)
             .map_err(|e| {
                 println!("could not open {}: {}", binding, e);
-                e
+                NewCollectionFileError::IoError(e)
             })?;
         let mut page_number: u64 = 0;
         let mut encoded = vec![0u8; 1];
@@ -53,16 +60,26 @@ impl<T: Document> CollectionFile<T> {
             page_number += 1;
         }
 
-        let collection = CollectionFile {
+        let mut collection = CollectionFile {
             number_of_pages: page_number,
             file,
             _marker: PhantomData,
         };
+
+        if page_number == 0 {
+            let first_page = CollectionPage::<T>::new(0);
+            collection
+                .write_page(&first_page)
+                .map_err(NewCollectionFileError::WritePageError)?;
+
+            collection.number_of_pages = 1;
+        }
+
         Ok(collection)
     }
 
     pub fn read_page(self: &Self, page_number: u64) -> Result<CollectionPage<T>, ReadPageError> {
-        if page_number > self.number_of_pages {
+        if page_number >= self.number_of_pages {
             return Err(ReadPageError::PageNumberTooHighError);
         }
 
@@ -70,9 +87,9 @@ impl<T: Document> CollectionFile<T> {
         let mut encoded = vec![0u8; COLLECTION_PAGE_SIZE as usize];
         self.file
             .read_at(&mut encoded, offset)
-            .map_err(|e| ReadPageError::IoError(e))?;
+            .map_err(ReadPageError::IoError)?;
 
-        bincode::deserialize(&encoded[..]).map_err(|e| ReadPageError::DeserializeError(e))
+        bincode::deserialize(&encoded[..]).map_err(ReadPageError::DeserializeError)
     }
 
     pub fn write_page(&mut self, page: &CollectionPage<T>) -> Result<(), WritePageError> {
@@ -80,18 +97,22 @@ impl<T: Document> CollectionFile<T> {
             return Err(WritePageError::PageNumberTooHighError);
         }
 
-        if page.get_page_number() == self.number_of_pages + 1 {
+        if page.get_page_number() == self.number_of_pages {
             self.number_of_pages += 1;
         }
 
         let offset = COLLECTION_PAGE_SIZE * page.get_page_number();
 
-        let binary = bincode::serialize(page).map_err(|e| WritePageError::SerializeError(e))?;
+        let binary = bincode::serialize(page).map_err(WritePageError::SerializeError)?;
 
         self.file
             .write_all_at(&binary, offset)
-            .map_err(|e| WritePageError::IoError(e))?;
+            .map_err(WritePageError::IoError)?;
         Ok(())
+    }
+
+    pub fn number_of_pages(&self) -> u64 {
+        self.number_of_pages
     }
 }
 
