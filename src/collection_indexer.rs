@@ -5,7 +5,7 @@ use crate::{
     document::{Document, HasId},
 };
 
-fn index_collection_hash<T: Document>(
+fn index_collection_id<T: Document>(
     collection_file: CollectionFile<T>,
 ) -> Result<HashMap<<T as HasId>::Id, u64>, ReadPageError> {
     let mut collection_index = HashMap::<<T>::Id, u64>::new();
@@ -61,7 +61,7 @@ mod tests {
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
-        let hash = index_collection_hash(collection_file).unwrap();
+        let hash = index_collection_id(collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
@@ -87,7 +87,7 @@ mod tests {
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
-        let hash = index_collection_hash(collection_file).unwrap();
+        let hash = index_collection_id(collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
@@ -116,7 +116,7 @@ mod tests {
         collection_file.write_page(&collection_page_0).unwrap();
         collection_file.write_page(&collection_page_1).unwrap();
 
-        let hash = index_collection_hash(collection_file).unwrap();
+        let hash = index_collection_id(collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
