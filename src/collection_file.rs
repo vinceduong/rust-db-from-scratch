@@ -1,4 +1,4 @@
-use crate::collection_page::CollectionPage;
+use crate::collection_page::{CollectionPage, CollectionPageHeader};
 use crate::document::Document;
 use bincode::ErrorKind;
 use std::error::Error;
@@ -85,6 +85,26 @@ impl<T: Document> CollectionFile<T> {
 
         let offset = COLLECTION_PAGE_SIZE * page_number;
         let mut encoded = vec![0u8; COLLECTION_PAGE_SIZE as usize];
+        self.file
+            .read_at(&mut encoded, offset)
+            .map_err(ReadPageError::IoError)?;
+
+        bincode::deserialize(&encoded[..]).map_err(ReadPageError::DeserializeError)
+    }
+
+    pub fn read_page_header(
+        self: &Self,
+        page_number: u64,
+    ) -> Result<CollectionPageHeader, ReadPageError> {
+        if page_number >= self.number_of_pages {
+            return Err(ReadPageError::PageNumberTooHighError);
+        }
+
+        let offset = COLLECTION_PAGE_SIZE * page_number;
+
+        let header_size: usize = std::mem::size_of::<CollectionPageHeader>();
+
+        let mut encoded = vec![0u8; header_size];
         self.file
             .read_at(&mut encoded, offset)
             .map_err(ReadPageError::IoError)?;

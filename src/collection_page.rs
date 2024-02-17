@@ -36,6 +36,16 @@ pub enum RemoveDocumentError {
     NotFound,
 }
 
+impl CollectionPageHeader {
+    pub fn number_of_documents(&self) -> u64 {
+        return self.number_of_documents;
+    }
+
+    pub fn space_available(&self) -> u64 {
+        return self.free_space_available;
+    }
+}
+
 impl<T: Document> CollectionPage<T> {
     pub fn new(page_number: u64) -> CollectionPage<T> {
         CollectionPage {
