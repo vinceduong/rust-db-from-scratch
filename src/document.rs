@@ -7,6 +7,6 @@ pub trait HasId {
     fn id(&self) -> Self::Id;
 }
 
-pub trait Document: Serialize + DeserializeOwned + HasId + std::fmt::Debug {}
+pub trait Document: Serialize + DeserializeOwned + HasId + std::fmt::Debug + Clone {}
 
-impl<T: Serialize + DeserializeOwned + HasId + std::fmt::Debug> Document for T {}
+impl<T: Serialize + DeserializeOwned + HasId + std::fmt::Debug + Clone> Document for T {}

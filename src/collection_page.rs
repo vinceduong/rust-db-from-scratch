@@ -74,8 +74,8 @@ impl<T: Document> CollectionPage<T> {
         Ok(())
     }
 
-    pub fn find_document(&self, id: <T as HasId>::Id) -> Option<&T> {
-        self.documents.iter().find(|d| d.id() == id)
+    pub fn find_document(&self, id: <T as HasId>::Id) -> Option<T> {
+        self.documents.iter().find(|d| d.id() == id).cloned()
     }
 
     pub fn documents(&self) -> &Vec<T> {
@@ -184,7 +184,7 @@ mod tests {
             .unwrap();
 
         let document = collection_page.find_document(1);
-        assert_eq!(*document.unwrap(), MyDocument { id: 1 })
+        assert_eq!(document.unwrap(), MyDocument { id: 1 })
     }
 
     #[test]
