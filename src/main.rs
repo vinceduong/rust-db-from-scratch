@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+mod collection;
 mod collection_file;
 mod collection_indexer;
 mod collection_page;

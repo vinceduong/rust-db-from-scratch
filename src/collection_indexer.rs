@@ -5,9 +5,11 @@ use crate::{
     document::{Document, HasId},
 };
 
-fn index_collection_id<T: Document>(
-    collection_file: CollectionFile<T>,
-) -> Result<HashMap<<T as HasId>::Id, u64>, ReadPageError> {
+pub type IdToPageMap<T> = HashMap<<T as HasId>::Id, u64>;
+
+pub fn index_collection_id<T: Document>(
+    collection_file: &CollectionFile<T>,
+) -> Result<IdToPageMap<T>, ReadPageError> {
     let mut collection_index = HashMap::<<T>::Id, u64>::new();
     println!("{:?}", collection_file);
 
@@ -61,12 +63,12 @@ mod tests {
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
-        let hash = index_collection_id(collection_file).unwrap();
+        let index_hash_map = index_collection_id(&collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
 
-        assert_eq!(hash, expected_hash_map)
+        assert_eq!(index_hash_map, expected_hash_map)
     }
 
     #[test]
@@ -87,13 +89,13 @@ mod tests {
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
-        let hash = index_collection_id(collection_file).unwrap();
+        let index_hash_map = index_collection_id(&collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
         expected_hash_map.insert(2, 0);
 
-        assert_eq!(hash, expected_hash_map)
+        assert_eq!(index_hash_map, expected_hash_map)
     }
 
     #[test]
@@ -116,12 +118,12 @@ mod tests {
         collection_file.write_page(&collection_page_0).unwrap();
         collection_file.write_page(&collection_page_1).unwrap();
 
-        let hash = index_collection_id(collection_file).unwrap();
+        let index_hash_map = index_collection_id(&collection_file).unwrap();
 
         let mut expected_hash_map = HashMap::new();
         expected_hash_map.insert(1, 0);
         expected_hash_map.insert(2, 1);
 
-        assert_eq!(hash, expected_hash_map)
+        assert_eq!(index_hash_map, expected_hash_map)
     }
 }
