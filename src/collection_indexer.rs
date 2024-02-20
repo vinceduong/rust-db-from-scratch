@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
+use crate::collection_file::CollectionFileError;
 use crate::{
-    collection_file::{CollectionFile, ReadPageError},
+    collection_file::CollectionFile,
     document::{Document, HasId},
 };
 
@@ -9,7 +10,7 @@ pub type IdToPageMap<T> = HashMap<<T as HasId>::Id, u64>;
 
 pub fn index_collection_id<T: Document>(
     collection_file: &CollectionFile<T>,
-) -> Result<IdToPageMap<T>, ReadPageError> {
+) -> Result<IdToPageMap<T>, CollectionFileError> {
     let mut collection_index = HashMap::<<T>::Id, u64>::new();
     println!("{:?}", collection_file);
 

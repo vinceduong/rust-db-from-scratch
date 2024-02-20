@@ -1,4 +1,7 @@
-use crate::document::{Document, HasId};
+use crate::{
+    collection::CollectionInsertError,
+    document::{Document, HasId},
+};
 use bincode::ErrorKind;
 
 use serde::{Deserialize, Serialize};
@@ -19,21 +22,15 @@ pub struct CollectionPage<T> {
 }
 
 #[derive(Debug)]
-pub enum InsertDocumentError {
+pub enum CollectionPageError {
     NoFreeSpaceAvailable,
     SerializeError(Box<ErrorKind>),
+    DocumentNotFound,
 }
-
-#[derive(Debug)]
-pub enum UpdateDocumentError {
-    NotFound,
-    NoFreeSpaceAvailable,
-    SerializeError(Box<ErrorKind>),
-}
-
-#[derive(Debug)]
-pub enum RemoveDocumentError {
-    NotFound,
+impl From<Box<ErrorKind>> for CollectionPageError {
+    fn from(err: Box<ErrorKind>) -> Self {
+        CollectionPageError::SerializeError(err)
+    }
 }
 
 impl CollectionPageHeader {
@@ -62,9 +59,8 @@ impl<T: Document> CollectionPage<T> {
         self.header.page_number
     }
 
-    pub fn insert_document(&mut self, document: T) -> Result<(), InsertDocumentError> {
-        let document_size = bincode::serialized_size(&document)
-            .map_err(|e| InsertDocumentError::SerializeError(e))?;
+    pub fn insert_document(&mut self, document: T) -> Result<(), CollectionPageError> {
+        let document_size = bincode::serialized_size(&document)?;
 
         println!("Document size: {:?}", document_size);
         println!(
@@ -73,7 +69,7 @@ impl<T: Document> CollectionPage<T> {
         );
 
         if self.header.free_space_available < document_size as u64 {
-            return Err(InsertDocumentError::NoFreeSpaceAvailable);
+            return Err(CollectionPageError::NoFreeSpaceAvailable);
         }
 
         self.documents.push(document);
@@ -92,18 +88,16 @@ impl<T: Document> CollectionPage<T> {
         &self.documents
     }
 
-    pub fn update_document(&mut self, new_doc: T) -> Result<(), UpdateDocumentError> {
+    pub fn update_document(&mut self, new_doc: T) -> Result<(), CollectionPageError> {
         for (index, value) in self.documents.iter().enumerate() {
             if value.id() == new_doc.id() {
-                let old_version_size = bincode::serialized_size(&value)
-                    .map_err(|e| UpdateDocumentError::SerializeError(e))?;
-                let new_vesion_size = bincode::serialized_size(&new_doc)
-                    .map_err(|e| UpdateDocumentError::SerializeError(e))?;
+                let old_version_size = bincode::serialized_size(&value)?;
+                let new_vesion_size = bincode::serialized_size(&new_doc)?;
 
                 if self.header.free_space_available - old_version_size + new_vesion_size
                     > COLLECTION_PAGE_DATA_SIZE
                 {
-                    return Err(UpdateDocumentError::NoFreeSpaceAvailable);
+                    return Err(CollectionPageError::NoFreeSpaceAvailable);
                 }
 
                 self.header.free_space_available -= old_version_size + new_vesion_size;
@@ -113,15 +107,15 @@ impl<T: Document> CollectionPage<T> {
                 return Ok(());
             }
         }
-        return Err(UpdateDocumentError::NotFound);
+        return Err(CollectionPageError::DocumentNotFound);
     }
 
-    pub fn remove_document(&mut self, id: <T as HasId>::Id) -> Result<T, RemoveDocumentError> {
+    pub fn remove_document(&mut self, id: <T as HasId>::Id) -> Result<T, CollectionPageError> {
         let index = self
             .documents
             .iter()
             .position(|e| e.id() == id)
-            .ok_or_else(|| RemoveDocumentError::NotFound)?;
+            .ok_or_else(|| CollectionPageError::DocumentNotFound)?;
 
         Ok(self.documents.swap_remove(index))
     }
