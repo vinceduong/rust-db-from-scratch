@@ -10,3 +10,5 @@ pub trait HasId {
 pub trait Document: Serialize + DeserializeOwned + HasId + std::fmt::Debug + Clone {}
 
 impl<T: Serialize + DeserializeOwned + HasId + std::fmt::Debug + Clone> Document for T {}
+
+pub type Filter<T> = fn(d: &T) -> bool;
