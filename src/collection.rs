@@ -11,10 +11,12 @@ struct Collection<T: Document> {
     collection_file: CollectionFile<T>,
 }
 
+#[derive(Debug)]
 pub enum CollectionInsertError {
     FileError(CollectionFileError),
     PageError(CollectionPageError),
     DocumentTooBig,
+    DuplicateError,
     SerializeError(Box<bincode::ErrorKind>),
 }
 
@@ -83,6 +85,10 @@ impl<T: Document> Collection<T> {
         let doc_id = doc.id();
         let document_size = bincode::serialized_size(&doc)?;
 
+        if self.id_to_page_map.contains_key(&doc_id) {
+            return Err(CollectionInsertError::DuplicateError);
+        }
+
         if document_size > COLLECTION_PAGE_DATA_SIZE {
             return Err(CollectionInsertError::DocumentTooBig);
         }
@@ -104,13 +110,14 @@ impl<T: Document> Collection<T> {
 
     fn find_by(&self, filter: Filter<T>) -> Vec<T> {
         let mut matching_docs: Vec<T> = vec![];
-        let page_number = 0;
+        let mut page_number = 0;
         while let Ok(page) = self.collection_file.read_page(page_number) {
             for document in page.documents().iter() {
                 if filter(document) {
                     matching_docs.push(document.to_owned());
                 }
             }
+            page_number += 1;
         }
 
         matching_docs
@@ -124,9 +131,10 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use tempfile::tempdir;
 
-    #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
+    #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
     struct MyDocument {
         id: u64,
+        name: String,
     }
 
     impl HasId for MyDocument {
@@ -138,18 +146,104 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_one_find_one_collection() {
+    fn test_insert_one_find_one_by_id() {
         let dir = tempdir().unwrap();
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
         let mut collection = Collection::<MyDocument>::new("test", dir_name);
 
-        let document: MyDocument = MyDocument { id: 0 };
+        let document: MyDocument = MyDocument {
+            id: 0,
+            name: String::from("test1"),
+        };
 
-        collection.insert_one(document);
+        collection.insert_one(document.clone()).unwrap();
 
         let doc_from_collection = collection.find_by_id(0).unwrap();
 
         assert_eq!(document, doc_from_collection);
+    }
+
+    #[test]
+    fn test_insert_find_all_collection() {
+        let dir = tempdir().unwrap();
+        let binding = dir.into_path();
+        let dir_name = binding.to_str().unwrap();
+        let mut collection = Collection::<MyDocument>::new("test", dir_name);
+        println!(
+            "------------------------------------------------------ Number of pages: {}",
+            collection.collection_file.number_of_pages()
+        );
+
+        let documents: Vec<MyDocument> = vec![
+            MyDocument {
+                id: 0,
+                name: String::from("test1"),
+            },
+            MyDocument {
+                id: 1,
+                name: String::from("test2"),
+            },
+        ];
+
+        for document in &documents {
+            collection.insert_one(document.clone()).unwrap();
+        }
+
+        let doc_from_collection = collection.find_by(|_| true);
+
+        assert_eq!(documents, doc_from_collection);
+    }
+
+    #[test]
+    fn test_insert_find_by_collection() {
+        let dir = tempdir().unwrap();
+        let binding = dir.into_path();
+        let dir_name = binding.to_str().unwrap();
+        let mut collection = Collection::<MyDocument>::new("test", dir_name);
+
+        println!(
+            "------------------------------------------------------ Number of pages: {}",
+            collection.collection_file.number_of_pages()
+        );
+
+        let documents: Vec<MyDocument> = vec![
+            MyDocument {
+                id: 0,
+                name: String::from("test1"),
+            },
+            MyDocument {
+                id: 1,
+                name: String::from("test2"),
+            },
+            MyDocument {
+                id: 2,
+                name: String::from("test3"),
+            },
+            MyDocument {
+                id: 3,
+                name: String::from("test4"),
+            },
+        ];
+
+        for document in &documents {
+            collection.insert_one(document.clone()).unwrap();
+        }
+
+        let doc_from_collection = collection.find_by(|doc| doc.id() % 2 == 0);
+
+        assert_eq!(
+            vec![
+                MyDocument {
+                    id: 0,
+                    name: String::from("test1"),
+                },
+                MyDocument {
+                    id: 2,
+                    name: String::from("test3"),
+                },
+            ],
+            doc_from_collection
+        );
     }
 }
