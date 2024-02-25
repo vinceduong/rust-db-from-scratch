@@ -6,7 +6,9 @@ use bincode::ErrorKind;
 
 use serde::{Deserialize, Serialize};
 
-const COLLECTION_PAGE_DATA_SIZE: u64 = 62_000;
+pub const COLLECTION_PAGE_SIZE: u64 = 64_000;
+pub const COLLECTION_PAGE_HEADER_SIZE: u64 = std::mem::size_of::<CollectionPageHeader>() as u64;
+pub const COLLECTION_PAGE_DATA_SIZE: u64 = COLLECTION_PAGE_SIZE - COLLECTION_PAGE_HEADER_SIZE;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CollectionPageHeader {

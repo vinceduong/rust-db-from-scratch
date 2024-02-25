@@ -170,10 +170,6 @@ mod tests {
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
         let mut collection = Collection::<MyDocument>::new("test", dir_name);
-        println!(
-            "------------------------------------------------------ Number of pages: {}",
-            collection.collection_file.number_of_pages()
-        );
 
         let documents: Vec<MyDocument> = vec![
             MyDocument {
@@ -201,11 +197,6 @@ mod tests {
         let binding = dir.into_path();
         let dir_name = binding.to_str().unwrap();
         let mut collection = Collection::<MyDocument>::new("test", dir_name);
-
-        println!(
-            "------------------------------------------------------ Number of pages: {}",
-            collection.collection_file.number_of_pages()
-        );
 
         let documents: Vec<MyDocument> = vec![
             MyDocument {

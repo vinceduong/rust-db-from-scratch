@@ -1,12 +1,10 @@
-use crate::collection_page::{CollectionPage, CollectionPageHeader};
+use crate::collection_page::{CollectionPage, CollectionPageHeader, COLLECTION_PAGE_SIZE};
 use crate::document::Document;
 use bincode::ErrorKind;
 use std::fs::{File, OpenOptions};
 use std::marker::PhantomData;
 use std::os::unix::prelude::FileExt;
 use std::path::Path;
-
-const COLLECTION_PAGE_SIZE: u64 = 64_000;
 
 #[derive(Debug)]
 pub struct CollectionFile<T: Document> {
