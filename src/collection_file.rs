@@ -217,7 +217,7 @@ mod tests {
         assert_eq!(collection_page_1, collection_page_from_file_1);
 
         collection_page_0
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
 
         collection.write_page(&collection_page_0).unwrap();

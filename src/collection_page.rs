@@ -1,7 +1,4 @@
-use crate::{
-    collection::CollectionInsertError,
-    document::{Document, HasId},
-};
+use crate::document::{Document, HasId};
 use bincode::ErrorKind;
 
 use serde::{Deserialize, Serialize};
@@ -19,7 +16,7 @@ pub struct CollectionPageHeader {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CollectionPage<T> {
-    header: CollectionPageHeader,
+    pub header: CollectionPageHeader,
     documents: Vec<T>,
 }
 
@@ -61,7 +58,7 @@ impl<T: Document> CollectionPage<T> {
         self.header.page_number
     }
 
-    pub fn insert_document(&mut self, document: T) -> Result<(), CollectionPageError> {
+    pub fn insert_document(&mut self, document: &T) -> Result<(), CollectionPageError> {
         let document_size = bincode::serialized_size(&document)?;
 
         println!("Document size: {:?}", document_size);
@@ -74,7 +71,7 @@ impl<T: Document> CollectionPage<T> {
             return Err(CollectionPageError::NoFreeSpaceAvailable);
         }
 
-        self.documents.push(document);
+        self.documents.push(document.clone());
 
         self.header.free_space_available -= document_size as u64;
         self.header.number_of_documents += 1;
@@ -90,7 +87,7 @@ impl<T: Document> CollectionPage<T> {
         &self.documents
     }
 
-    pub fn update_document(&mut self, new_doc: T) -> Result<(), CollectionPageError> {
+    pub fn update_document(&mut self, new_doc: &T) -> Result<(), CollectionPageError> {
         for (index, value) in self.documents.iter().enumerate() {
             if value.id() == new_doc.id() {
                 let old_version_size = bincode::serialized_size(&value)?;
@@ -104,7 +101,7 @@ impl<T: Document> CollectionPage<T> {
 
                 self.header.free_space_available -= old_version_size + new_vesion_size;
 
-                self.documents[index] = new_doc;
+                self.documents[index] = new_doc.clone();
 
                 return Ok(());
             }
@@ -147,7 +144,7 @@ mod tests {
         let mut collection_page = CollectionPage::<MyDocument>::new(0);
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
 
         assert_eq!(collection_page.documents, vec![MyDocument { id: 1 }]);
@@ -163,11 +160,11 @@ mod tests {
         let mut collection_page = CollectionPage::<MyDocument>::new(0);
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
 
         collection_page
-            .insert_document(MyDocument { id: 2 })
+            .insert_document(&MyDocument { id: 2 })
             .unwrap();
 
         assert_eq!(
@@ -186,7 +183,7 @@ mod tests {
         let mut collection_page = CollectionPage::<MyDocument>::new(0);
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
 
         let document = collection_page.find_document(1);
@@ -198,7 +195,7 @@ mod tests {
         let mut collection_page = CollectionPage::<MyDocument>::new(0);
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
 
         let document = collection_page.find_document(2);
@@ -228,10 +225,10 @@ mod tests {
             name: "lol".to_string(),
         };
 
-        collection_page.insert_document(user_document).unwrap();
+        collection_page.insert_document(&user_document).unwrap();
 
         collection_page
-            .update_document(UserDocument {
+            .update_document(&UserDocument {
                 id: 1,
                 name: "mdr".to_string(),
             })
@@ -268,7 +265,7 @@ mod tests {
             name: "lol".to_string(),
         };
 
-        collection_page.insert_document(user_document).unwrap();
+        collection_page.insert_document(&user_document).unwrap();
         collection_page.remove_document(1).unwrap();
 
         assert_eq!(collection_page.documents, vec![])

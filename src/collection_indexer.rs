@@ -60,7 +60,7 @@ mod tests {
         let mut collection_page = collection_file.read_page(0).unwrap();
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
@@ -83,10 +83,10 @@ mod tests {
         let mut collection_page = collection_file.read_page(0).unwrap();
 
         collection_page
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
         collection_page
-            .insert_document(MyDocument { id: 2 })
+            .insert_document(&MyDocument { id: 2 })
             .unwrap();
         collection_file.write_page(&collection_page).unwrap();
 
@@ -111,10 +111,10 @@ mod tests {
         let mut collection_page_1 = CollectionPage::<MyDocument>::new(1);
 
         collection_page_0
-            .insert_document(MyDocument { id: 1 })
+            .insert_document(&MyDocument { id: 1 })
             .unwrap();
         collection_page_1
-            .insert_document(MyDocument { id: 2 })
+            .insert_document(&MyDocument { id: 2 })
             .unwrap();
         collection_file.write_page(&collection_page_0).unwrap();
         collection_file.write_page(&collection_page_1).unwrap();
